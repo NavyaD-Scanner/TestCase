@@ -1,210 +1,114 @@
 
+import streamlit as st
+import pandas as pd
+import time
 
-import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+st.set_page_config(page_title="Teamcenter Test Generator", layout="wide")
 
-const modules = [
-  "Workflow",
-  "Item Management",
-  "BOM Management",
-  "Change Management",
-  "Dataset Management",
-  "Access Control",
-  "Supplier Collaboration"
-];
+modules = [
+    "Workflow",
+    "Item Management",
+    "BOM Management",
+    "Change Management",
+    "Dataset Management",
+    "Access Control",
+    "Supplier Collaboration"
+]
 
-export default function TestCaseGeneratorApp() {
-  const [input, setInput] = useState("");
-  const [selectedModules, setSelectedModules] = useState([]);
-  const [testCases, setTestCases] = useState([]);
+if "test_cases" not in st.session_state:
+    st.session_state.test_cases = []
 
-  const toggleModule = (module) => {
-    setSelectedModules((prev) =>
-      prev.includes(module)
-        ? prev.filter((m) => m !== module)
-        : [...prev, module]
-    );
-  };
+def generate_test_cases(input_text, selected_modules):
+    text = input_text.lower()
+    generated = []
 
+    for module in selected_modules:
+        generated.append({
+            "ID": f"TC_{int(time.time())}",
+            "Module": module,
+            "Title": f"{module} - Basic Validation",
+            "Steps": "Login -> Navigate -> Perform -> Validate",
+            "Expected": "Success",
+            "Priority": "High",
+            "Status": "Not Run"
+        })
 
-  const generateTestCases = () => {
-    if (!input || selectedModules.length === 0) return;
+        if module == "Workflow":
+            generated.append({
+                "ID": f"TC_{int(time.time())}",
+                "Module": module,
+                "Title": "Workflow Initiation",
+                "Steps": "Start Workflow -> Verify",
+                "Expected": "Workflow started",
+                "Priority": "High",
+                "Status": "Not Run"
+            })
 
+            if "approval" in text:
+                generated.append({
+                    "ID": f"TC_{int(time.time())}",
+                    "Module": module,
+                    "Title": "Approval Flow",
+                    "Steps": "Approve Task -> Verify",
+                    "Expected": "Moves forward",
+                    "Priority": "High",
+                    "Status": "Not Run"
+                })
 
-    const text = input.toLowerCase();
-    let generated = [];
-    selectedModules.forEach((module) => {
-      generated.push({
-        id: `TC_${Date.now()}_${module}`,
-        module,
-        title: `${module} - Basic Validation`,
-        preconditions: "User logged into Teamcenter",
-        steps: [
-          "Login to Teamcenter",
-          `Navigate to ${module}`,
-          "Perform operation",
-          "Validate outcome"
-        ],
-        expected: "System behaves correctly",
-        priority: "High"
-      });
+            if "rejection" in text:
+                generated.append({
+                    "ID": f"TC_{int(time.time())}",
+                    "Module": module,
+                    "Title": "Rejection Flow",
+                    "Steps": "Reject Task -> Rollback",
+                    "Expected": "Returns to initiator",
+                    "Priority": "Medium",
+                    "Status": "Not Run"
+                })
 
-      if (module === "Workflow") {
-        generated.push({
-          id: `TC_${Date.now()}_WF`,
-          module,
-          title: "Workflow Initiation",
-          preconditions: "Item exists",
-          steps: [
-            "Select object",
-            "Start workflow",
-            "Verify process created"
-          ],
-          expected: "Workflow started",
-          priority: "High"
-        });
+    return generated
 
-        if (text.includes("approval")) {
-          generated.push({
-            id: `TC_${Date.now()}_APP`,
-            module,
-            title: "Approval Flow",
-            preconditions: "Workflow initiated",
-            steps: ["Approve task", "Verify next stage"],
-            expected: "Moves forward",
-            priority: "High"
-          });
-        }
-        if (text.includes("rejection")) {
-          generated.push({
-            id: `TC_${Date.now()}_REJ`,
-            module,
-            title: "Rejection Flow",
-            steps: ["Reject task", "Verify rollback"],
-            expected: "Returns to initiator",
-            priority: "Medium"
-          });
-        }
-      }
-    });
-    if (text.includes("user") || text.includes("group")) {
-      generated.push({
-        id: `TC_${Date.now()}_USR`,
-        module: "Common",
-        title: "User Assignment",
-        steps: [
-          "Check assigned users",
-          "Verify correct group"
-        ],
-        expected: "Correct assignment",
-        priority: "High"
-      });
-    }
+# UI
+st.title("🚀 Teamcenter Test Case Generator")
 
+selected_modules = st.multiselect("Select Modules", modules)
+requirement = st.text_area("Enter Requirement")
 
-    generated.push({
-      id: `TC_${Date.now()}_E2E`,
-      module: "Common",
-      title: "End-to-End Test",
-      steps: [
-        "Execute full flow",
-        "Validate final output"
-      ],
-      expected: "Flow completed",
-      priority: "High"
-    });
+if st.button("Generate Test Cases"):
+    if requirement and selected_modules:
+        st.session_state.test_cases = generate_test_cases(requirement, selected_modules)
 
-    setTestCases(generated);
-  };
+# Display
+if st.session_state.test_cases:
+    df = pd.DataFrame(st.session_state.test_cases)
 
-  const exportCSV = () => {
-    const headers = ["ID", "Module", "Title", "Preconditions", "Steps", "Expected", "Priority"];
-    const rows = testCases.map(tc => [
-      tc.id,
-      tc.module,
-      tc.title,
-      tc.preconditions || "",
-      tc.steps.join(" | "),
-      tc.expected,
-      tc.priority
-    ]);
+    st.subheader("📊 Dashboard")
+    pass_count = len(df[df["Status"] == "Pass"])
+    fail_count = len(df[df["Status"] == "Fail"])
+    not_run = len(df) - pass_count - fail_count
 
+    st.write(f"✅ Passed: {pass_count}")
+    st.write(f"❌ Failed: {fail_count}")
+    st.write(f"🟡 Not Run: {not_run}")
 
-    const csvContent = [headers, ...rows]
-      .map(e => e.join(","))
-      .join("
-");
+    st.subheader("📝 Test Cases")
 
+    for i, row in df.iterrows():
+        col1, col2 = st.columns([3,1])
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "test_cases.csv";
-    a.click();
-  };
+        with col1:
+            st.write(f"**{row['Title']}**")
+            st.write(f"Module: {row['Module']}")
+            st.write(f"Steps: {row['Steps']}")
+            st.write(f"Expected: {row['Expected']}")
+            st.write(f"Status: {row['Status']}")
 
+        with col2:
+            if st.button(f"Pass {i}"):
+                st.session_state.test_cases[i]["Status"] = "Pass"
+            if st.button(f"Fail {i}"):
+                st.session_state.test_cases[i]["Status"] = "Fail"
 
-  return (
-    <div className="p-6 grid gap-6">
-      <Card>
-        <CardContent>
-          <h1>Teamcenter Test Case Generator</h1>
-          <p>Select Modules</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {modules.map((mod) => (
-              <button
-                key={mod}
-                className={`px-3 py-1 border rounded ${selectedModules.includes(mod) ? "bg-blue-500 text-white" : ""}`}
-                onClick={() => toggleModule(mod)}
-              >
-                {mod}
-              </button>
-            ))}
-          </div>
-          <Textarea
-            placeholder="Enter requirement"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-
-          <Button className="mt-4" onClick={generateTestCases}>
-            Generate
-          </Button>
-        </CardContent>
-      </Card>
-
-      {testCases.length > 0 && (
-        <Card>
-          <CardContent>
-            <h2>Generated Test Cases</h2>
-
-            <Button className="mb-3" onClick={exportCSV}>
-              Export to CSV
-            </Button>
-
-
-            <p>Total Test Cases: {testCases.length}</p>
-            <p>Modules Covered: {selectedModules.join(", ")}</p>
-
-
-            {testCases.map((tc) => (
-              <div key={tc.id} className="border p-3 mb-2">
-                <h3>{tc.title}</h3>
-                <p><b>Module:</b> {tc.module}</p>
-                <p><b>Preconditions:</b> {tc.preconditions}</p>
-                <ul>
-                  {tc.steps.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-                <p><b>Expected:</b> {tc.expected}</p>
-                <p><b>Priority:</b> {tc.priority}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+    st.subheader("⬇️ Export")
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download CSV", csv, "test_cases.csv", "text/csv")
