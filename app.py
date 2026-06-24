@@ -5,6 +5,7 @@ import time
 
 st.set_page_config(page_title="Teamcenter Test Generator", layout="wide")
 
+# ---------------- MODULES ----------------
 modules = [
     "Workflow",
     "Item Management",
@@ -15,100 +16,107 @@ modules = [
     "Supplier Collaboration"
 ]
 
+# ---------------- SESSION STATE ----------------
 if "test_cases" not in st.session_state:
     st.session_state.test_cases = []
 
+# ---------------- FUNCTION ----------------
 def generate_test_cases(input_text, selected_modules):
     text = input_text.lower()
     generated = []
 
     for module in selected_modules:
+
+        # Generic Case
         generated.append({
-            "ID": f"TC_{int(time.time())}",
-            "Module": module,
             "Title": f"{module} - Basic Validation",
-            "Steps": "Login -> Navigate -> Perform -> Validate",
-            "Expected": "Success",
-            "Priority": "High",
-            "Status": "Not Run"
+            "Steps": [
+                "Login to Teamcenter",
+                f"Navigate to {module}",
+                "Perform operation",
+                "Validate outcome"
+            ],
+            "Expected": "System works correctly"
         })
 
+        # Workflow detailed case (your real example)
         if module == "Workflow":
             generated.append({
-                "ID": f"TC_{int(time.time())}",
-                "Module": module,
-                "Title": "Workflow Initiation",
-                "Steps": "Start Workflow -> Verify",
-                "Expected": "Workflow started",
-                "Priority": "High",
-                "Status": "Not Run"
+                "Title": "Prototype Release Validation - DR Workflow",
+                "Steps": [
+                    "Use required TTT DR number (e.g., DR00000****)",
+                    "Go to BW Properties tab and confirm Target Release Status = Prototype",
+                    "Click More Commands → Edit → Set Sync Prototype to SAP = NO",
+                    "Navigate to Attachments tab → Add required Solution items",
+                    "Ensure all items have TTT Product Family attribute",
+                    "Submit to Workflow → QA_TTT_Design",
+                    "Complete Workflow",
+                    "Verify Prototype status applied to all Solution objects",
+                    "Ensure SAP workflow NOT triggered and DR closed"
+                ],
+                "Expected": "Prototype release without SAP transfer"
             })
-
-            if "approval" in text:
-                generated.append({
-                    "ID": f"TC_{int(time.time())}",
-                    "Module": module,
-                    "Title": "Approval Flow",
-                    "Steps": "Approve Task -> Verify",
-                    "Expected": "Moves forward",
-                    "Priority": "High",
-                    "Status": "Not Run"
-                })
-
-            if "rejection" in text:
-                generated.append({
-                    "ID": f"TC_{int(time.time())}",
-                    "Module": module,
-                    "Title": "Rejection Flow",
-                    "Steps": "Reject Task -> Rollback",
-                    "Expected": "Returns to initiator",
-                    "Priority": "Medium",
-                    "Status": "Not Run"
-                })
 
     return generated
 
-# UI
+
+# ---------------- UI ----------------
 st.title("🚀 Teamcenter Test Case Generator")
 
 selected_modules = st.multiselect("Select Modules", modules)
 requirement = st.text_area("Enter Requirement")
 
+# Screenshot Upload
+uploaded_file = st.file_uploader("Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
+
+if uploaded_file:
+    st.image(uploaded_file, caption="Uploaded Screenshot", use_column_width=True)
+
+# Generate
 if st.button("Generate Test Cases"):
     if requirement and selected_modules:
         st.session_state.test_cases = generate_test_cases(requirement, selected_modules)
 
-# Display
+# ---------------- DISPLAY ----------------
 if st.session_state.test_cases:
-    df = pd.DataFrame(st.session_state.test_cases)
 
-    st.subheader("📊 Dashboard")
-    pass_count = len(df[df["Status"] == "Pass"])
-    fail_count = len(df[df["Status"] == "Fail"])
-    not_run = len(df) - pass_count - fail_count
+    st.subheader("📝 Generated Test Cases")
 
-    st.write(f"✅ Passed: {pass_count}")
-    st.write(f"❌ Failed: {fail_count}")
-    st.write(f"🟡 Not Run: {not_run}")
+    all_rows = []
 
-    st.subheader("📝 Test Cases")
+    for idx, tc in enumerate(st.session_state.test_cases):
 
-    for i, row in df.iterrows():
-        col1, col2 = st.columns([3,1])
+        st.markdown(f"### {tc['Title']}")
 
-        with col1:
-            st.write(f"**{row['Title']}**")
-            st.write(f"Module: {row['Module']}")
-            st.write(f"Steps: {row['Steps']}")
-            st.write(f"Expected: {row['Expected']}")
-            st.write(f"Status: {row['Status']}")
+        # Table format
+        table_data = []
+        for i, step in enumerate(tc["Steps"], start=1):
+            table_data.append({
+                "S.No": i,
+                "High Level Validation Steps": step
+            })
 
-        with col2:
-            if st.button(f"Pass {i}"):
-                st.session_state.test_cases[i]["Status"] = "Pass"
-            if st.button(f"Fail {i}"):
-                st.session_state.test_cases[i]["Status"] = "Fail"
+            all_rows.append({
+                "Test Case": tc["Title"],
+                "S.No": i,
+                "Step": step,
+                "Expected": tc["Expected"]
+            })
 
-    st.subheader("⬇️ Export")
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download CSV", csv, "test_cases.csv", "text/csv")
+        df = pd.DataFrame(table_data)
+        st.table(df)
+
+        st.write(f"✅ Expected: {tc['Expected']}")
+        st.markdown("---")
+
+    # ---------------- CSV EXPORT ----------------
+    export_df = pd.DataFrame(all_rows)
+
+    csv = export_df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="⬇️ Download CSV",
+        data=csv,
+        file_name="test_cases.csv",
+        mime="text/csv"
+    )
