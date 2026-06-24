@@ -1,11 +1,13 @@
 
 import streamlit as st
 import pandas as pd
-import time
+import openai
 
-st.set_page_config(page_title="Teamcenter Test Generator", layout="wide")
+# ---------------- CONFIG ----------------
+openai.api_key = "YOUR_OPENAI_API_KEY"
 
-# ---------------- MODULES ----------------
+st.set_page_config(page_title="AI Test Case Generator", layout="wide")
+
 modules = [
     "Workflow",
     "Item Management",
@@ -16,107 +18,135 @@ modules = [
     "Supplier Collaboration"
 ]
 
-# ---------------- SESSION STATE ----------------
+# ---------------- SESSION ----------------
 if "test_cases" not in st.session_state:
     st.session_state.test_cases = []
 
-# ---------------- FUNCTION ----------------
-def generate_test_cases(input_text, selected_modules):
-    text = input_text.lower()
-    generated = []
+# ---------------- AI FUNCTION ----------------
+def generate_ai_test_cases(requirement, modules):
 
-    for module in selected_modules:
+    prompt = f"""
+You are a Teamcenter QA expert.
 
-        # Generic Case
-        generated.append({
-            "Title": f"{module} - Basic Validation",
-            "Steps": [
-                "Login to Teamcenter",
-                f"Navigate to {module}",
-                "Perform operation",
-                "Validate outcome"
-            ],
-            "Expected": "System works correctly"
-        })
+Requirement:
+{requirement}
 
-        # Workflow detailed case (your real example)
-        if module == "Workflow":
-            generated.append({
-                "Title": "Prototype Release Validation - DR Workflow",
-                "Steps": [
-                    "Use required TTT DR number (e.g., DR00000****)",
-                    "Go to BW Properties tab and confirm Target Release Status = Prototype",
-                    "Click More Commands → Edit → Set Sync Prototype to SAP = NO",
-                    "Navigate to Attachments tab → Add required Solution items",
-                    "Ensure all items have TTT Product Family attribute",
-                    "Submit to Workflow → QA_TTT_Design",
-                    "Complete Workflow",
-                    "Verify Prototype status applied to all Solution objects",
-                    "Ensure SAP workflow NOT triggered and DR closed"
-                ],
-                "Expected": "Prototype release without SAP transfer"
-            })
+Modules:
+{modules}
 
-    return generated
+Generate test cases in this format:
+
+- Title
+- Steps (numbered)
+- Expected Result
+
+Make steps detailed and realistic for Teamcenter workflows.
+
+Return output in structured format.
+"""
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    return response["choices"][0]["message"]["content"]
+
+
+# ---------------- PARSER ----------------
+def parse_ai_output(text):
+    test_cases = []
+    lines = text.split("\n")
+
+    current = None
+
+    for line in lines:
+        line = line.strip()
+
+        if line.lower().startswith("title"):
+            if current:
+                test_cases.append(current)
+
+            current = {
+                "title": line.replace("Title:", "").strip(),
+                "steps": [],
+                "expected": ""
+            }
+
+        elif line.startswith("1.") or line.startswith("2.") or line.startswith("3."):
+            current["steps"].append(line)
+
+        elif "expected" in line.lower():
+            current["expected"] = line
+
+    if current:
+        test_cases.append(current)
+
+    return test_cases
 
 
 # ---------------- UI ----------------
-st.title("🚀 Teamcenter Test Case Generator")
+st.title("🚀 AI Teamcenter Test Case Generator")
 
 selected_modules = st.multiselect("Select Modules", modules)
 requirement = st.text_area("Enter Requirement")
 
-# Screenshot Upload
+# Screenshot
 uploaded_file = st.file_uploader("Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
-    st.image(uploaded_file, caption="Uploaded Screenshot", use_column_width=True)
+    st.image(uploaded_file, caption="Reference Screenshot")
 
-# Generate
-if st.button("Generate Test Cases"):
+# Generate AI
+if st.button("Generate AI Test Cases"):
     if requirement and selected_modules:
-        st.session_state.test_cases = generate_test_cases(requirement, selected_modules)
+        with st.spinner("AI generating test cases..."):
+            ai_output = generate_ai_test_cases(requirement, selected_modules)
+            parsed = parse_ai_output(ai_output)
+
+            st.session_state.test_cases = parsed
+
 
 # ---------------- DISPLAY ----------------
 if st.session_state.test_cases:
+    st.subheader("📝 AI Generated Test Cases")
 
-    st.subheader("📝 Generated Test Cases")
+    export_rows = []
 
-    all_rows = []
+    for tc in st.session_state.test_cases:
 
-    for idx, tc in enumerate(st.session_state.test_cases):
+        st.markdown(f"### {tc['title']}")
 
-        st.markdown(f"### {tc['Title']}")
-
-        # Table format
         table_data = []
-        for i, step in enumerate(tc["Steps"], start=1):
+
+        for i, step in enumerate(tc["steps"], start=1):
             table_data.append({
                 "S.No": i,
                 "High Level Validation Steps": step
             })
 
-            all_rows.append({
-                "Test Case": tc["Title"],
+            export_rows.append({
+                "Test Case": tc["title"],
                 "S.No": i,
                 "Step": step,
-                "Expected": tc["Expected"]
+                "Expected": tc["expected"]
             })
 
         df = pd.DataFrame(table_data)
         st.table(df)
 
-        st.write(f"✅ Expected: {tc['Expected']}")
+        st.write(f"✅ Expected: {tc['expected']}")
         st.markdown("---")
 
-    # ---------------- CSV EXPORT ----------------
-    export_df = pd.DataFrame(all_rows)
+    # CSV DOWNLOAD
+    export_df = pd.DataFrame(export_rows)
 
     csv = export_df.to_csv(index=False).encode("utf-8")
 
     st.download_button(
-        label="⬇️ Download CSV",
+        "⬇️ Download CSV",
         data=csv,
-        file_name="test_cases.csv",
+        file_name="ai_test_cases.csv",
         mime="text/csv"
     )
+``
