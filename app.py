@@ -78,4 +78,3 @@ if generate_btn:
             file_name="test_cases.csv",
             mime='text/csv'
         )
-``
