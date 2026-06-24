@@ -1,199 +1,81 @@
 
 import streamlit as st
 import pandas as pd
-import time
 
-# ✅ SAFE IMPORT (no crash if missing)
-try:
-    import openai
-except ImportError:
-    openai = None
+# -------------------------------
+# Page Config
+# -------------------------------
+st.set_page_config(page_title="Test Case Generator", layout="wide")
 
-st.set_page_config(page_title="AI Test Case Generator", layout="wide")
+st.title("🚀 AI Test Case Generator (Teamcenter Modules)")
+st.markdown("Generate structured test cases based on requirements")
 
-# ---------------- MODULES ----------------
+# -------------------------------
+# Inputs
+# -------------------------------
 modules = [
-    "Workflow",
     "Item Management",
-    "BOM Management",
+    "Workflow",
     "Change Management",
-    "Dataset Management",
+    "Supplier Collaboration",
     "Access Control",
-    "Supplier Collaboration"
+    "BOM Management"
 ]
 
-# ---------------- SESSION ----------------
-if "test_cases" not in st.session_state:
-    st.session_state.test_cases = []
+selected_module = st.selectbox("Select Module", modules)
 
-# ---------------- AI / FALLBACK FUNCTION ----------------
-def generate_test_cases(requirement, selected_modules):
+requirement = st.text_area("Enter Requirement", height=150)
 
-    # ✅ If AI not available → fallback logic
-    if openai is None:
-        return fallback_test_cases(requirement, selected_modules)
+conditions = st.multiselect(
+    "Select Conditions",
+    ["Positive", "Negative", "Edge Case", "Security", "Performance"]
+)
 
-    prompt = f"""
-You are a Teamcenter QA expert.
+num_cases = st.slider("Number of Test Cases", 1, 10, 5)
 
-Requirement:
-{requirement}
+generate_btn = st.button("Generate Test Cases")
 
-Modules:
-{selected_modules}
-
-Generate detailed test cases:
-- Title
-- Steps (numbered)
-- Expected Result
-"""
-
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        ai_output = response["choices"][0]["message"]["content"]
-        return parse_ai_output(ai_output)
-
-    except Exception:
-        return fallback_test_cases(requirement, selected_modules)
-
-
-# ---------------- FALLBACK (IMPORTANT ✅) ----------------
-def fallback_test_cases(requirement, selected_modules):
+# -------------------------------
+# Logic
+# -------------------------------
+def generate_test_cases(module, requirement, conditions, n):
     test_cases = []
 
-    for module in selected_modules:
+    for i in range(1, n + 1):
+        condition = conditions[i % len(conditions)] if conditions else "General"
 
-        # Generic Case
         test_cases.append({
-            "title": f"{module} - Basic Validation",
-            "steps": [
-                "Login to Teamcenter",
-                f"Navigate to {module}",
-                "Perform operation",
-                "Validate results"
-            ],
-            "expected": "System performs correctly"
+            "Test Case ID": f"TC_{module[:3].upper()}_{i}",
+            "Module": module,
+            "Scenario": f"{condition} scenario for {requirement[:40]}",
+            "Precondition": f"User logged into {module}",
+            "Steps": f"1. Open {module}\n2. Perform action\n3. Validate result",
+            "Expected Result": f"System behaves correctly under {condition} condition",
+            "Priority": ["High", "Medium", "Low"][i % 3]
         })
 
-        # Workflow Real Case
-        if module == "Workflow":
-            test_cases.append({
-                "title": "Prototype Release Validation - DR Workflow",
-                "steps": [
-                    "Use required TTT DR number (e.g., DR00000****)",
-                    "Go to BW Properties tab and confirm Target Release Status = Prototype",
-                    "Click More Commands → Edit → Set Sync Prototype to SAP = NO",
-                    "Navigate to Attachments tab → Add required Solution items",
-                    "Ensure all items have TTT Product Family attribute",
-                    "Submit workflow → QA_TTT_Design",
-                    "Complete workflow",
-                    "Verify Prototype status applied",
-                    "Ensure SAP NOT triggered and DR closed"
-                ],
-                "expected": "Prototype release completed without SAP transfer"
-            })
+    return pd.DataFrame(test_cases)
 
-    return test_cases
+# -------------------------------
+# Output
+# -------------------------------
+if generate_btn:
+    if not requirement.strip():
+        st.error("Please enter requirement")
+    else:
+        df = generate_test_cases(selected_module, requirement, conditions, num_cases)
 
+        st.success("✅ Test Cases Generated!")
 
-# ---------------- PARSE AI OUTPUT ----------------
-def parse_ai_output(text):
-    test_cases = []
-    lines = text.split("\n")
+        st.dataframe(df, use_container_width=True)
 
-    current = None
+        # Download option
+        csv = df.to_csv(index=False).encode('utf-8')
 
-    for line in lines:
-        line = line.strip()
-
-        if line.lower().startswith("title"):
-            if current:
-                test_cases.append(current)
-
-            current = {
-                "title": line.replace("Title:", "").strip(),
-                "steps": [],
-                "expected": ""
-            }
-
-        elif line.startswith(tuple([f"{i}." for i in range(1, 20)])):
-            if current:
-                current["steps"].append(line)
-
-        elif "expected" in line.lower():
-            if current:
-                current["expected"] = line
-
-    if current:
-        test_cases.append(current)
-
-    return test_cases
-
-
-# ---------------- UI ----------------
-st.title("🚀 AI Teamcenter Test Case Generator")
-
-selected_modules = st.multiselect("Select Modules", modules)
-requirement = st.text_area("Enter Requirement")
-
-# ✅ Screenshot Upload
-uploaded_file = st.file_uploader("Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
-
-if uploaded_file:
-    st.image(uploaded_file, caption="Reference Screenshot", use_column_width=True)
-
-# ---------------- GENERATE ----------------
-if st.button("Generate Test Cases"):
-    if requirement and selected_modules:
-        with st.spinner("Generating test cases..."):
-            st.session_state.test_cases = generate_test_cases(requirement, selected_modules)
-
-# ---------------- DISPLAY ----------------
-if st.session_state.test_cases:
-
-    st.subheader("📝 Generated Test Cases")
-
-    export_rows = []
-
-    for tc in st.session_state.test_cases:
-
-        st.markdown(f"### {tc['title']}")
-
-        table_data = []
-
-        for i, step in enumerate(tc["steps"], start=1):
-            table_data.append({
-                "S.No": i,
-                "High Level Validation Steps": step
-            })
-
-            export_rows.append({
-                "Test Case": tc["title"],
-                "S.No": i,
-                "Step": step,
-                "Expected": tc["expected"]
-            })
-
-        df = pd.DataFrame(table_data)
-
-        # ✅ TABLE OUTPUT
-        st.table(df)
-
-        st.write(f"✅ Expected: {tc['expected']}")
-        st.markdown("---")
-
-    # ---------------- CSV DOWNLOAD ----------------
-    export_df = pd.DataFrame(export_rows)
-
-    csv = export_df.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        label="⬇️ Download CSV",
-        data=csv,
-        file_name="test_cases.csv",
-        mime="text/csv"
-    )
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name="test_cases.csv",
+            mime='text/csv'
+        )
+``
