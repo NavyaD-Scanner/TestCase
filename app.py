@@ -194,13 +194,20 @@ if generate_btn:
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Download CSV", csv, "test_cases.csv", "text/csv")
 
-        # Excel Download (IN-MEMORY SAFE)
-        excel_buffer = BytesIO()
-        df.to_excel(excel_buffer, index=False, engine="openpyxl")
+        
+# Excel Download (SAFE)
+try:
+    from io import BytesIO
+    excel_buffer = BytesIO()
+    df.to_excel(excel_buffer, index=False, engine="openpyxl")
 
-        st.download_button(
-            "📥 Download Excel",
-            excel_buffer.getvalue(),
-            "test_cases.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    st.download_button(
+        "📥 Download Excel",
+        excel_buffer.getvalue(),
+        "test_cases.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+except ImportError:
+    st.warning("⚠️ openpyxl not installed. Please check requirements.txt")
+except Exception as e:
+    st.warning(f"⚠️ Excel export failed: {str(e)}")
