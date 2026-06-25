@@ -1,17 +1,18 @@
 
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 # -------------------------------
 # Page Config
 # -------------------------------
-st.set_page_config(page_title="AI Test Case Generator", layout="wide")
+st.set_page_config(page_title="Enterprise Test Case Generator", layout="wide")
 
-st.title("🚀 AI Test Case Generator (Teamcenter Ready)")
-st.markdown("Generate detailed, module-specific test cases")
+st.title("🚀 Enterprise AI Test Case Generator (Teamcenter)")
+st.markdown("Generate consulting-level structured test cases")
 
 # -------------------------------
-# Module Options
+# Input Section
 # -------------------------------
 modules = [
     "Item Management",
@@ -36,145 +37,170 @@ num_cases = st.slider("Number of Test Cases", 1, 20, 6)
 generate_btn = st.button("Generate Test Cases")
 
 # -------------------------------
-# Core Logic
+# AI-like Requirement Parser
+# -------------------------------
+def parse_requirement(requirement):
+    req = requirement.lower()
+    return {
+        "has_workflow": "workflow" in req or "approve" in req,
+        "has_dataset": "dataset" in req or "file" in req,
+        "has_item": "item" in req,
+        "has_bom": "bom" in req or "structure" in req,
+        "has_release": "release" in req or "status" in req,
+    }
+
+# -------------------------------
+# Core Generator (Enterprise Logic)
 # -------------------------------
 def generate_test_cases(module, requirement, conditions, n):
 
+    parsed = parse_requirement(requirement)
     test_cases = []
-
-    # Module-specific steps
-    module_steps = {
-        "Item Management": [
-            "Login to Teamcenter AWC",
-            "Navigate to Item Creation",
-            "Enter mandatory attributes",
-            "Save item"
-        ],
-        "Workflow": [
-            "Login to Teamcenter",
-            "Create workflow process",
-            "Attach target object",
-            "Start workflow",
-            "Complete assigned task"
-        ],
-        "Change Management": [
-            "Create Change Request",
-            "Add affected items",
-            "Submit for approval",
-            "Approve change"
-        ],
-        "Supplier Collaboration": [
-            "Login as Supplier",
-            "Access shared object",
-            "Download dataset",
-            "Upload updated dataset"
-        ],
-        "Access Control": [
-            "Login with specific role",
-            "Access restricted object",
-            "Attempt modify/delete action"
-        ],
-        "BOM Management": [
-            "Open BOM structure",
-            "Add/remove components",
-            "Save BOM"
-        ]
-    }
-
-    base_steps = module_steps.get(module, ["Open system", "Perform action", "Validate result"])
 
     for i in range(n):
 
         condition = conditions[i % len(conditions)] if conditions else "Positive"
 
-        # Scenario generation
-        if condition == "Positive":
-            scenario = f"[{module}] Verify successful execution of: {requirement}"
-            expected = "Operation completed successfully with correct data saved"
+        scenario = f"[{module}] {condition} scenario: {requirement}"
 
-        elif condition == "Negative":
-            scenario = f"[{module}] Validate system behavior with invalid input for: {requirement}"
-            expected = "Appropriate error message should be displayed"
+        precondition = """User logged into Teamcenter AWC
+User has correct role (Engineer/Reviewer)
+Required objects exist in system"""
 
-        elif condition == "Edge Case":
-            scenario = f"[{module}] Validate boundary values and maximum limits for: {requirement}"
-            expected = "System should handle edge conditions without failure"
+        steps = ["1. Login to Teamcenter Active Workspace (AWC)"]
+        step_no = 2
 
-        elif condition == "Security":
-            scenario = f"[{module}] Verify role-based access restriction for: {requirement}"
-            expected = "Unauthorized users should not be allowed to perform action"
+        # ---------------- ITEM ----------------
+        if parsed["has_item"]:
+            steps.append(f"{step_no}. Search and open Item")
+            step_no += 1
+
+        # ---------------- DATASET ----------------
+        if parsed["has_dataset"]:
+            steps.extend([
+                f"{step_no}. Navigate to Dataset tab",
+                f"{step_no+1}. Upload dataset file",
+                f"{step_no+2}. Validate named references"
+            ])
+            step_no += 3
+
+        # ---------------- WORKFLOW (EPM) ----------------
+        if parsed["has_workflow"]:
+            steps.extend([
+                f"{step_no}. Open Workflow tab",
+                f"{step_no+1}. Click 'Start Workflow'",
+                f"{step_no+2}. Select workflow template",
+                f"{step_no+3}. Assign signoff users",
+                f"{step_no+4}. Submit workflow",
+                f"{step_no+5}. Open Inbox",
+                f"{step_no+6}. Execute EPMDoTask",
+                f"{step_no+7}. Approve task"
+            ])
+            step_no += 8
+
+            if condition == "Negative":
+                steps.extend([
+                    f"{step_no}. Reject task",
+                    f"{step_no+1}. Verify workflow loops back"
+                ])
+                step_no += 2
+
+        # ---------------- BOM ----------------
+        if parsed["has_bom"]:
+            steps.extend([
+                f"{step_no}. Open Structure Manager",
+                f"{step_no+1}. Expand BOM",
+                f"{step_no+2}. Apply Revision Rule (Latest)",
+                f"{step_no+3}. Modify components",
+                f"{step_no+4}. Save BOM",
+                f"{step_no+5}. Verify revision"
+            ])
+            step_no += 6
+
+        # ---------------- RELEASE ----------------
+        if parsed["has_release"]:
+            steps.extend([
+                f"{step_no}. Check release status",
+                f"{step_no+1}. Promote lifecycle state",
+                f"{step_no+2}. Verify status change"
+            ])
+            step_no += 3
+
+        # ---------------- CONDITIONS ----------------
+        if condition == "Security":
+            steps.extend([
+                f"{step_no}. Login with unauthorized user",
+                f"{step_no+1}. Try restricted access",
+                f"{step_no+2}. Verify access denied"
+            ])
+            step_no += 3
 
         elif condition == "Performance":
-            scenario = f"[{module}] Validate system performance under heavy load for: {requirement}"
-            expected = "System should respond within SLA time"
+            steps.extend([
+                f"{step_no}. Perform repeated operations",
+                f"{step_no+1}. Monitor response time"
+            ])
+            step_no += 2
 
-        # Steps generation
-        steps = []
-        for idx, step in enumerate(base_steps):
-            steps.append(f"{idx+1}. {step}")
+        elif condition == "Edge Case":
+            steps.extend([
+                f"{step_no}. Use boundary inputs",
+                f"{step_no+1}. Validate system handling"
+            ])
+            step_no += 2
 
-        # Add condition-specific steps
-        if condition == "Negative":
-            steps.append(f"{len(steps)+1}. Provide invalid or missing input data")
+        # ---------------- OUTPUT FIELDS ----------------
+        expected = """System should:
+- Execute workflow correctly
+- Maintain data integrity
+- Handle failures gracefully
+- Update lifecycle and revision properly"""
 
-        if condition == "Security":
-            steps.append(f"{len(steps)+1}. Login with unauthorized role")
+        test_data = f"""Item ID: TC_ITEM_{i}
+Dataset: sample.pdf
+Workflow: Standard Approval
+Revision Rule: Latest Working
+User Role: Engineer"""
 
-        if condition == "Performance":
-            steps.append(f"{len(steps)+1}. Execute same operation multiple times concurrently")
-
-        # Precondition
-        precondition = f"User logged into {module} module with required access"
+        priority = "High" if condition in ["Negative", "Security"] else "Medium"
 
         test_cases.append({
-            "Test Case ID": f"TC_{module[:3].upper()}_{i+1}",
+            "Test Case ID": f"TC_{i+1:03}",
             "Module": module,
             "Condition": condition,
             "Scenario": scenario,
             "Precondition": precondition,
             "Steps": "\n".join(steps),
+            "Test Data": test_data,
             "Expected Result": expected,
-            "Priority": ["High", "Medium", "Low"][i % 3]
+            "Priority": priority
         })
 
     return pd.DataFrame(test_cases)
 
 # -------------------------------
-# UI Output
+# Output Section
 # -------------------------------
 if generate_btn:
     if not requirement.strip():
-        st.error("⚠️ Please enter requirement")
+        st.error("⚠️ Please enter a requirement")
     else:
         df = generate_test_cases(selected_module, requirement, conditions, num_cases)
 
         st.success("✅ Test Cases Generated Successfully")
-
         st.dataframe(df, use_container_width=True)
 
-        # Download options
-        csv = df.to_csv(index=False).encode('utf-8')
+        # CSV Download
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download CSV", csv, "test_cases.csv", "text/csv")
+
+        # Excel Download (IN-MEMORY SAFE)
+        excel_buffer = BytesIO()
+        df.to_excel(excel_buffer, index=False, engine="openpyxl")
 
         st.download_button(
-            label="📥 Download CSV",
-            data=csv,
-            file_name="teamcenter_test_cases.csv",
-            mime='text/csv'
+            "📥 Download Excel",
+            excel_buffer.getvalue(),
+            "test_cases.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-        # Excel Download
-
-try:
-    excel_file = "test_cases.xlsx"
-    df.to_excel(excel_file, index=False, engine="openpyxl")
-
-    with open(excel_file, "rb") as f:
-        st.download_button(
-            label="📥 Download Excel",
-            data=f,
-            file_name=excel_file,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-except Exception as e:
-    st.warning("⚠️ Excel export not available. Please check openpyxl installation.")
-
