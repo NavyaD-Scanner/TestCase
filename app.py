@@ -163,13 +163,18 @@ if generate_btn:
         )
 
         # Excel Download
-        excel_file = "test_cases.xlsx"
-        df.to_excel(excel_file, index=False)
 
-        with open(excel_file, "rb") as f:
-            st.download_button(
-                label="📥 Download Excel",
-                data=f,
-                file_name=excel_file,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+try:
+    excel_file = "test_cases.xlsx"
+    df.to_excel(excel_file, index=False, engine="openpyxl")
+
+    with open(excel_file, "rb") as f:
+        st.download_button(
+            label="📥 Download Excel",
+            data=f,
+            file_name=excel_file,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+except Exception as e:
+    st.warning("⚠️ Excel export not available. Please check openpyxl installation.")
+
